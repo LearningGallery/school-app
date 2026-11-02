@@ -22,7 +22,7 @@ repos:
     hooks:
       - id: lint
         name: eslint and prettier
-        entry: npm run lint
+        entry: npm --prefix school-app run lint  # monorepo path; drop --prefix after splitting the repo
         language: system
         pass_filenames: false
         files: \.(ts|tsx|js|json)$

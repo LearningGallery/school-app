@@ -25,10 +25,13 @@ RUN --mount=type=cache,target=/root/.npm npm ci --workspace backend --omit=dev
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# The runtime never runs a package manager. Dropping npm/yarn/corepack removes their bundled
+# dependencies (and their CVEs) from the image and denies an attacker a tool.
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-*
 COPY --from=prod-deps --chown=node:node /app /app
 COPY --from=build --chown=node:node /app/backend/dist backend/dist
 # Migrations ship in the same image so the migration Job runs the exact artifact being deployed.
 COPY --chown=node:node database/migrations database/migrations
-USER node
+USER 1000:1000
 EXPOSE 8080
 CMD ["node", "backend/dist/server.js"]
