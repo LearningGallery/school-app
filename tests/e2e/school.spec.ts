@@ -17,7 +17,7 @@ test("login, create student, mark attendance, view grade report", async ({
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Students" })).toBeVisible();
 
-  await page.getByLabel("Full name").fill(name);
+  await page.getByLabel("Display name").fill(name);
   await page.getByLabel("Email").fill(`ada.${run}@example.com`);
   await page.getByRole("button", { name: "Add student" }).click();
   await expect(page.getByRole("cell", { name })).toBeVisible();

@@ -67,6 +67,60 @@ describe("validation and errors", () => {
   });
 });
 
+describe("students: expand phase (v2)", () => {
+  const row = {
+    id: UUID,
+    displayName: "Ada",
+    fullName: "Ada",
+    email: "ada@example.com",
+    gradeLevel: 5,
+  };
+
+  it("writes the name to BOTH columns so v1 and v2 pods can share the database", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [row] });
+    await request(app)
+      .post("/api/students")
+      .set("Authorization", `Bearer ${tokenFor("admin")}`)
+      .send({ displayName: "Ada", email: "ada@example.com", gradeLevel: 5 })
+      .expect(201);
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/INSERT INTO students \(full_name, display_name,/);
+    expect(params[0]).toBe("Ada");
+  });
+
+  it("still accepts the v1 field fullName", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [row] });
+    await request(app)
+      .post("/api/students")
+      .set("Authorization", `Bearer ${tokenFor("admin")}`)
+      .send({ fullName: "Ada", email: "ada@example.com", gradeLevel: 5 })
+      .expect(201);
+  });
+
+  it("reads display_name and falls back to full_name", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [row] });
+    await request(app)
+      .get("/api/students")
+      .set("Authorization", `Bearer ${tokenFor("admin")}`)
+      .expect(200);
+    expect((query.mock.calls[0] as [string])[0]).toMatch(
+      /COALESCE\(display_name, full_name\)/,
+    );
+  });
+
+  it("rejects a student with no name at all", async () => {
+    const { app } = build();
+    await request(app)
+      .post("/api/students")
+      .set("Authorization", `Bearer ${tokenFor("admin")}`)
+      .send({ email: "ada@example.com", gradeLevel: 5 })
+      .expect(400);
+  });
+});
+
 describe("feature flag and metrics", () => {
   const grades = {
     rows: [{ classId: UUID, className: "Maths", term: "T1", score: 91 }],

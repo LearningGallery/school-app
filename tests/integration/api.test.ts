@@ -43,7 +43,7 @@ describe("school flow against real Postgres", () => {
         .post("/api/students")
         .set("Authorization", auth)
         .send({
-          fullName: "Ada Lovelace",
+          displayName: "Ada Lovelace",
           email: "ada@example.com",
           gradeLevel: 7,
         })
@@ -108,7 +108,11 @@ describe("school flow against real Postgres", () => {
     await request(app)
       .post("/api/students")
       .set("Authorization", auth)
-      .send({ fullName: "Ada Again", email: "ada@example.com", gradeLevel: 7 })
+      .send({
+        displayName: "Ada Again",
+        email: "ada@example.com",
+        gradeLevel: 7,
+      })
       .expect(409);
   });
 
