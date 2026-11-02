@@ -41,7 +41,7 @@ describe("auth", () => {
     await request(app)
       .post("/api/students")
       .set("Authorization", `Bearer ${tokenFor("teacher")}`)
-      .send({ fullName: "Ada", email: "ada@example.com", gradeLevel: 5 })
+      .send({ displayName: "Ada", email: "ada@example.com", gradeLevel: 5 })
       .expect(403);
   });
 });
@@ -52,7 +52,7 @@ describe("validation and errors", () => {
     await request(app)
       .post("/api/students")
       .set("Authorization", `Bearer ${tokenFor("admin")}`)
-      .send({ fullName: "", email: "not-an-email", gradeLevel: 99 })
+      .send({ displayName: "", email: "not-an-email", gradeLevel: 99 })
       .expect(400);
   });
 
@@ -62,21 +62,20 @@ describe("validation and errors", () => {
     await request(app)
       .post("/api/students")
       .set("Authorization", `Bearer ${tokenFor("admin")}`)
-      .send({ fullName: "Ada", email: "ada@example.com", gradeLevel: 5 })
+      .send({ displayName: "Ada", email: "ada@example.com", gradeLevel: 5 })
       .expect(409);
   });
 });
 
-describe("students: expand phase (v2)", () => {
+describe("students: contract phase (v3)", () => {
   const row = {
     id: UUID,
     displayName: "Ada",
-    fullName: "Ada",
     email: "ada@example.com",
     gradeLevel: 5,
   };
 
-  it("writes the name to BOTH columns so v1 and v2 pods can share the database", async () => {
+  it("writes only display_name", async () => {
     const { app, query } = build();
     query.mockResolvedValue({ rows: [row] });
     await request(app)
@@ -84,39 +83,17 @@ describe("students: expand phase (v2)", () => {
       .set("Authorization", `Bearer ${tokenFor("admin")}`)
       .send({ displayName: "Ada", email: "ada@example.com", gradeLevel: 5 })
       .expect(201);
-    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/INSERT INTO students \(full_name, display_name,/);
-    expect(params[0]).toBe("Ada");
+    const sql = (query.mock.calls[0] as [string])[0];
+    expect(sql).toMatch(/INSERT INTO students \(display_name,/);
+    expect(sql).not.toMatch(/full_name/);
   });
 
-  it("still accepts the v1 field fullName", async () => {
-    const { app, query } = build();
-    query.mockResolvedValue({ rows: [row] });
-    await request(app)
-      .post("/api/students")
-      .set("Authorization", `Bearer ${tokenFor("admin")}`)
-      .send({ fullName: "Ada", email: "ada@example.com", gradeLevel: 5 })
-      .expect(201);
-  });
-
-  it("reads display_name and falls back to full_name", async () => {
-    const { app, query } = build();
-    query.mockResolvedValue({ rows: [row] });
-    await request(app)
-      .get("/api/students")
-      .set("Authorization", `Bearer ${tokenFor("admin")}`)
-      .expect(200);
-    expect((query.mock.calls[0] as [string])[0]).toMatch(
-      /COALESCE\(display_name, full_name\)/,
-    );
-  });
-
-  it("rejects a student with no name at all", async () => {
+  it("no longer accepts the v1 field fullName", async () => {
     const { app } = build();
     await request(app)
       .post("/api/students")
       .set("Authorization", `Bearer ${tokenFor("admin")}`)
-      .send({ email: "ada@example.com", gradeLevel: 5 })
+      .send({ fullName: "Ada", email: "ada@example.com", gradeLevel: 5 })
       .expect(400);
   });
 });

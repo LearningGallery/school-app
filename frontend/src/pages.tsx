@@ -64,9 +64,7 @@ export function StudentsPage() {
       await api("/students", {
         method: "POST",
         body: {
-          // v2 sends both fields so a v1 backend still receiving traffic during the rollout accepts it
           displayName: f.get("displayName"),
-          fullName: f.get("displayName"),
           email: f.get("email"),
           gradeLevel: Number(f.get("gradeLevel")),
         },
@@ -107,7 +105,7 @@ export function StudentsPage() {
         <tbody>
           {items.map((s) => (
             <tr key={s.id}>
-              <td>{s.displayName ?? s.fullName}</td>
+              <td>{s.displayName}</td>
               <td>{s.email}</td>
               <td>{s.gradeLevel}</td>
             </tr>
@@ -163,10 +161,7 @@ export function AttendancePage() {
       setError(message(err));
     }
   }
-  const nameOf = (id: string) =>
-    students.items.find((s) => s.id === id)?.displayName ??
-    students.items.find((s) => s.id === id)?.fullName ??
-    id;
+  const nameOf = (id: string) => students.items.find((s) => s.id === id)?.displayName ?? id;
 
   return (
     <section>
@@ -202,7 +197,7 @@ export function AttendancePage() {
           <select name="studentId" aria-label="Student" required>
             {students.items.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.displayName ?? s.fullName}
+                {s.displayName}
               </option>
             ))}
           </select>
@@ -273,7 +268,7 @@ export function GradesPage() {
           <option value="">Select…</option>
           {students.items.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.displayName ?? s.fullName}
+              {s.displayName}
             </option>
           ))}
         </select>

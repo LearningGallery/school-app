@@ -39,40 +39,33 @@ export function apiRoutes({ config, db, flags }: Deps, metrics: Metrics) {
     });
   });
 
-  // ---- students: v2 = EXPAND phase of full_name -> display_name (module 19) ----
-  // Both columns exist. Reads prefer display_name and fall back to full_name; writes go to BOTH, so
-  // v1 pods (which read full_name) and v2 pods can share the database during a rolling update or a rollback.
-  const studentCols =
-    'id, COALESCE(display_name, full_name) AS "displayName", full_name AS "fullName", email, grade_level AS "gradeLevel"';
+  // ---- students: v3 = CONTRACT phase of full_name -> display_name (module 19) ----
+  // Only display_name exists now. This version must not be deployed until every v1 and v2 pod is gone.
+  const studentCols = 'id, display_name AS "displayName", email, grade_level AS "gradeLevel"';
   r.get("/students", authed, async (req, res) => {
     const { limit, offset } = page.parse(req.query);
-    const { rows } = await db.query(
-      `SELECT ${studentCols} FROM students ORDER BY COALESCE(display_name, full_name) LIMIT $1 OFFSET $2`,
-      [limit, offset],
-    );
+    const { rows } = await db.query(`SELECT ${studentCols} FROM students ORDER BY display_name LIMIT $1 OFFSET $2`, [
+      limit,
+      offset,
+    ]);
     res.json(rows);
   });
   r.post("/students", authed, admin, async (req, res) => {
     const b = z
       .object({
-        displayName: z.string().min(1).max(200).optional(),
-        fullName: z.string().min(1).max(200).optional(), // still accepted: v1 clients exist during rollout
+        displayName: z.string().min(1).max(200),
         email: z.email(),
         gradeLevel: z.number().int().min(1).max(12),
       })
-      .refine((v) => v.displayName ?? v.fullName, { message: "displayName is required" })
       .parse(req.body);
-    const name = (b.displayName ?? b.fullName) as string;
     const { rows } = await db.query(
-      `INSERT INTO students (full_name, display_name, email, grade_level) VALUES ($1, $1, $2, $3) RETURNING ${studentCols}`,
-      [name, b.email.toLowerCase(), b.gradeLevel],
+      `INSERT INTO students (display_name, email, grade_level) VALUES ($1, $2, $3) RETURNING ${studentCols}`,
+      [b.displayName, b.email.toLowerCase(), b.gradeLevel],
     );
     res.status(201).json(rows[0]);
   });
   r.get("/students/:id", authed, async (req, res) => {
-    const { rows } = await db.query(`SELECT ${studentCols} FROM students WHERE id = $1`, [
-      id.parse(req.params.id),
-    ]);
+    const { rows } = await db.query(`SELECT ${studentCols} FROM students WHERE id = $1`, [id.parse(req.params.id)]);
     if (!rows[0]) return res.status(404).json({ error: "not found" });
     res.json(rows[0]);
   });

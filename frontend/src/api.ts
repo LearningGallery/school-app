@@ -33,8 +33,7 @@ export async function api<T>(
 
 export interface Student {
   id: string;
-  displayName?: string;
-  fullName?: string; // v1 field, still returned while both app versions exist
+  displayName: string;
   email: string;
   gradeLevel: number;
 }
