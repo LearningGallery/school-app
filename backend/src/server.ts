@@ -1,12 +1,14 @@
-import { pino } from "pino";
 import { createApp, type RuntimeState } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db.js";
 import { EnvFlagProvider } from "./flags.js";
+import { createLogger } from "./logging.js";
 
 const config = loadConfig();
-const logger = pino({ level: config.LOG_LEVEL });
-const db = createPool(config.DATABASE_URL);
+const logger = createLogger(config.LOG_LEVEL);
+const db = createPool(config.DATABASE_URL, (err) =>
+  logger.error({ err }, "idle database connection failed"),
+);
 const state: RuntimeState = { started: false, shuttingDown: false };
 
 const app = createApp({ config, db, flags: new EnvFlagProvider(), logger, state });
