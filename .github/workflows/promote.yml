@@ -1,0 +1,72 @@
+# Promotion moves an already-built, already-attested digest to the next environment. It never builds.
+# The `environment` below carries the approval rule (required reviewers on production).
+# Phase 4 adds the final step: open a pull request against school-gitops with these digests.
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        required: true
+      backend_digest:
+        description: "Backend image digest (sha256:...)"
+        required: true
+      frontend_digest:
+        description: "Frontend image digest (sha256:...)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/release.yml
+    steps:
+      - name: Authenticate to AWS (OIDC, read-only role)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PULL_ROLE_ARN }} # trust policy is bound to this GitHub environment
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # Verify on consumption: the attestation must belong to this exact digest AND come from our repo
+      # and our release workflow. A scan result or a tag proves none of that.
+      - name: Verify provenance of both digests
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          BACKEND: ${{ inputs.backend_digest }}
+          FRONTEND: ${{ inputs.frontend_digest }}
+        run: |
+          set -euo pipefail
+          for ref in "school-backend@${BACKEND}" "school-frontend@${FRONTEND}"; do
+            gh attestation verify "oci://${REGISTRY}/${ref}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${SIGNER_WORKFLOW}"
+          done
+
+      - name: Record the promotion
+        env:
+          TARGET: ${{ inputs.environment }}
+          BACKEND: ${{ inputs.backend_digest }}
+          FRONTEND: ${{ inputs.frontend_digest }}
+        run: |
+          {
+            echo "### Promoted to ${TARGET}"
+            echo "- backend: \`${BACKEND}\`"
+            echo "- frontend: \`${FRONTEND}\`"
+            echo "- approved via GitHub Environment \`${TARGET}\`; run ${GITHUB_RUN_ID}, actor ${GITHUB_ACTOR}"
+          } >> "$GITHUB_STEP_SUMMARY"
