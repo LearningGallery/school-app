@@ -1,0 +1,109 @@
+# Build once, deploy many: this workflow is the ONLY place images are built.
+# Merge to main -> build -> push to ECR (OIDC, no stored keys) -> scan the pushed digest -> SBOM ->
+# provenance attestation. Staging and production later consume these exact digests (promote.yml).
+# Opening the GitOps pull request with the new digests is added in Phase 4 (school-gitops).
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # never cancel a release half-way
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [backend, frontend]
+    permissions:
+      id-token: write # request the GitHub OIDC token
+      contents: read
+      attestations: write # store attestations
+    env:
+      REPOSITORY: school-${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # GitHub OIDC token -> AWS STS checks the IAM role trust policy (repo + branch claims) -> temporary credentials.
+      - name: Authenticate to AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }} # e.g. arn:aws:iam::123456789012:role/school-release
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push (tag = commit SHA, traceability only)
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.image }}
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}:${{ github.sha }}
+          provenance: false # provenance comes from the GitHub attestation below, bound to the digest
+          sbom: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # Scan the digest that was actually pushed, not a rebuild. A failure stops here, so no attestation
+      # is created and the admission policy (Kyverno, Phase 4) will refuse the image.
+      - name: Trivy scan of the pushed digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}@${{ steps.push.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
+          exit-code: "1"
+
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}@${{ steps.push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom-${{ matrix.image }}.cdx.json
+          artifact-name: sbom-${{ matrix.image }}.cdx.json
+
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom-${{ matrix.image }}.cdx.json
+          push-to-registry: true
+
+      - name: Record the release
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          {
+            echo "### ${REPOSITORY}"
+            echo "- digest: \`${DIGEST}\`"
+            echo "- tag (traceability only): \`${GITHUB_SHA}\`"
+            echo "- deploy reference: \`${REGISTRY}/${REPOSITORY}@${DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
