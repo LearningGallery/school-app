@@ -1,6 +1,7 @@
 # Promotion moves an already-built, already-attested digest to the next environment. It never builds.
 # The `environment` below carries the approval rule (required reviewers on production).
-# Phase 4 adds the final step: open a pull request against school-gitops with these digests.
+# The last step opens a pull request against school-gitops with these digests. Git is the record of what runs where;
+# Argo CD deploys when that pull request merges (production still needs a manual sync and CODEOWNERS approval).
 name: promote
 
 on:
@@ -9,7 +10,7 @@ on:
       environment:
         description: Target environment
         type: choice
-        options: [staging, production]
+        options: [dev, staging, production]
         required: true
       backend_digest:
         description: "Backend image digest (sha256:...)"
@@ -70,3 +71,41 @@ jobs:
             echo "- frontend: \`${FRONTEND}\`"
             echo "- approved via GitHub Environment \`${TARGET}\`; run ${GITHUB_RUN_ID}, actor ${GITHUB_ACTOR}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # A GitHub App token scoped to ONE repository, valid for one hour. No personal access token, no long-lived secret.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.GITOPS_APP_ID }}
+          private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: school-gitops
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/school-gitops
+          token: ${{ steps.app-token.outputs.token }}
+          path: gitops
+
+      - name: Open the promotion pull request
+        working-directory: gitops
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET: ${{ inputs.environment }}
+          BACKEND: ${{ inputs.backend_digest }}
+          FRONTEND: ${{ inputs.frontend_digest }}
+        run: |
+          set -euo pipefail
+          branch="promote/${TARGET}-${GITHUB_RUN_ID}"
+          python3 scripts/set_image.py "$TARGET" --backend "$BACKEND" --frontend "$FRONTEND"
+          git config user.name "school-promotion[bot]"
+          git config user.email "school-promotion[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chore(${TARGET}): promote ${BACKEND:0:19} / ${FRONTEND:0:19}"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "Promote to ${TARGET}" \
+            --body "Digests verified against the release workflow's provenance in ${GITHUB_REPOSITORY}, run ${GITHUB_RUN_ID}, requested by ${GITHUB_ACTOR}.
+
+          - backend: \`${BACKEND}\`
+          - frontend: \`${FRONTEND}\`"
