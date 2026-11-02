@@ -1,0 +1,49 @@
+# The gate between staging and production (module 17): ask the DEPLOYED staging system real questions.
+# Run it after the staging promotion has synced. Production promotion should require this to be green.
+# Test credentials belong to a narrow staging-only account; they must not exist in production.
+name: verify-staging
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging-verification
+    env:
+      # The public origin, for example https://staging.school.example.com. The ALB routes only /api to the backend,
+      # so probes (/healthz, /readyz) and /metrics are NOT reachable from outside; SMOKE_PROBES=0 skips them here.
+      # A probe URL that falls through to the frontend would return the SPA's index.html with 200: a false pass.
+      BASE_URL: ${{ vars.STAGING_URL }}
+      E2E_BASE_URL: ${{ vars.STAGING_URL }}
+      SMOKE_PROBES: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Smoke test (login and a real query)
+        env:
+          SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+        run: tests/smoke/smoke.sh
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end journey
+        env:
+          E2E_ADMIN_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+        run: npm run e2e -w tests
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: playwright-traces
+          path: tests/test-results
+          retention-days: 7

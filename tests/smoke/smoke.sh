@@ -15,9 +15,13 @@ check() { # name expected_status url [curl args...]
   if [ "$got" = "$want" ]; then echo "ok    $name ($got)"; else echo "FAIL  $name: want $want got $got"; fail=1; fi
 }
 
-check "healthz"  200 "$BASE_URL/healthz"
-check "startupz" 200 "$BASE_URL/startupz"
-check "readyz"   200 "$BASE_URL/readyz"
+# Behind the load balancer only /api is routed; set SMOKE_PROBES=0 to skip the probe and metrics checks there.
+PROBES="${SMOKE_PROBES:-1}"
+if [ "$PROBES" = 1 ]; then
+  check "healthz"  200 "$BASE_URL/healthz"
+  check "startupz" 200 "$BASE_URL/startupz"
+  check "readyz"   200 "$BASE_URL/readyz"
+fi
 check "api requires auth" 401 "$BASE_URL/api/students"
 
 token=$(curl -s --max-time 10 -X POST "$BASE_URL/api/auth/login" -H 'Content-Type: application/json' \
@@ -29,6 +33,8 @@ else
   echo "FAIL  login"; fail=1
 fi
 
-if curl -s --max-time 10 "$BASE_URL/metrics" | grep -q '^http_requests_total'; then echo "ok    metrics"; else echo "FAIL  metrics"; fail=1; fi
+if [ "$PROBES" = 1 ]; then
+  if curl -s --max-time 10 "$BASE_URL/metrics" | grep -q '^http_requests_total'; then echo "ok    metrics"; else echo "FAIL  metrics"; fail=1; fi
+fi
 
 exit $fail
