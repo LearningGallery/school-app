@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# Build context: school-app/   (docker build -f Dockerfile.frontend school-app)
+ARG NODE_IMAGE=node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
+ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+
+FROM ${NODE_IMAGE} AS manifests
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+COPY tests/package.json tests/
+
+FROM manifests AS build
+RUN --mount=type=cache,target=/root/.npm npm ci --workspace frontend
+COPY frontend frontend
+RUN npm run build -w frontend
+
+# Runtime: static files + nginx as a non-root user (uid 101). Root filesystem can be read-only.
+FROM ${NGINX_IMAGE} AS runtime
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
+EXPOSE 8080
