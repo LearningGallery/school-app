@@ -64,7 +64,9 @@ export function StudentsPage() {
       await api("/students", {
         method: "POST",
         body: {
-          fullName: f.get("fullName"),
+          // v2 sends both fields so a v1 backend still receiving traffic during the rollout accepts it
+          displayName: f.get("displayName"),
+          fullName: f.get("displayName"),
           email: f.get("email"),
           gradeLevel: Number(f.get("gradeLevel")),
         },
@@ -80,7 +82,7 @@ export function StudentsPage() {
     <section>
       <h1>Students</h1>
       <form onSubmit={add} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input name="fullName" placeholder="Full name" aria-label="Full name" required />
+        <input name="displayName" placeholder="Display name" aria-label="Display name" required />
         <input name="email" type="email" placeholder="Email" aria-label="Email" required />
         <input
           name="gradeLevel"
@@ -105,7 +107,7 @@ export function StudentsPage() {
         <tbody>
           {items.map((s) => (
             <tr key={s.id}>
-              <td>{s.fullName}</td>
+              <td>{s.displayName ?? s.fullName}</td>
               <td>{s.email}</td>
               <td>{s.gradeLevel}</td>
             </tr>
@@ -161,7 +163,10 @@ export function AttendancePage() {
       setError(message(err));
     }
   }
-  const nameOf = (id: string) => students.items.find((s) => s.id === id)?.fullName ?? id;
+  const nameOf = (id: string) =>
+    students.items.find((s) => s.id === id)?.displayName ??
+    students.items.find((s) => s.id === id)?.fullName ??
+    id;
 
   return (
     <section>
@@ -197,7 +202,7 @@ export function AttendancePage() {
           <select name="studentId" aria-label="Student" required>
             {students.items.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.fullName}
+                {s.displayName ?? s.fullName}
               </option>
             ))}
           </select>
@@ -268,7 +273,7 @@ export function GradesPage() {
           <option value="">Select…</option>
           {students.items.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.fullName}
+              {s.displayName ?? s.fullName}
             </option>
           ))}
         </select>
