@@ -1,0 +1,11 @@
+title = "school-app gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic local-development values and test fixtures"
+paths = [
+  '''\.env\.example$''',
+  '''tests/(unit|integration)/.*''',
+]

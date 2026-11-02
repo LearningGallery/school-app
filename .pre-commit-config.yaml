@@ -1,0 +1,28 @@
+# Local guardrails. Install once: pip install pre-commit && pre-commit install
+# These run on your laptop and can be skipped (git commit --no-verify) or never installed,
+# so CI repeats every check. They give fast feedback; they are not the control.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks # scans staged changes only
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.15.1
+    hooks:
+      - id: hadolint-docker
+        files: Dockerfile\..*
+  - repo: local
+    hooks:
+      - id: lint
+        name: eslint and prettier
+        entry: npm run lint
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx|js|json)$

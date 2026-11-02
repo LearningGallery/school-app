@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+# Build context: school-app/   (docker build -f Dockerfile.backend school-app)
+# Base pinned by digest (node:22-alpine, multi-arch index). Update via Dependabot/Renovate PRs.
+ARG NODE_IMAGE=node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
+
+# Stage 1: manifests only. This layer is rebuilt only when dependencies change.
+FROM ${NODE_IMAGE} AS manifests
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+COPY tests/package.json tests/
+
+# Stage 2: full toolchain (compiler, dev dependencies). Never shipped.
+FROM manifests AS build
+RUN --mount=type=cache,target=/root/.npm npm ci --workspace backend
+COPY backend backend
+RUN npm run build -w backend
+
+# Stage 3: production dependencies only.
+FROM manifests AS prod-deps
+RUN --mount=type=cache,target=/root/.npm npm ci --workspace backend --omit=dev
+
+# Stage 4: runtime. We choose exactly what goes in: prod deps, compiled output, migrations.
+FROM ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=prod-deps --chown=node:node /app /app
+COPY --from=build --chown=node:node /app/backend/dist backend/dist
+# Migrations ship in the same image so the migration Job runs the exact artifact being deployed.
+COPY --chown=node:node database/migrations database/migrations
+USER node
+EXPOSE 8080
+CMD ["node", "backend/dist/server.js"]
