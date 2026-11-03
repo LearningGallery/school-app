@@ -7,3 +7,9 @@ vulnerabilities:
   - id: CVE-2026-92392
     statement: "curl/libcurl in nginx-unprivileged base, fix 8.23.0-r0 not yet in the pinned base image. curl is never invoked by the container. Re-pin the base when a patched image is published."
     expired_at: 2026-12-02
+  - id: CVE-2026-117610
+    statement: "libexpat 2.9.0-r0 in the nginx-unprivileged base, fix 2.10.0-r0 not yet in the pinned base image. nginx here serves static files and never parses XML. Re-pin the base when a patched image is published."
+    expired_at: 2026-12-02
+  - id: CVE-2026-118370
+    statement: "libexpat 2.9.0-r0 in the nginx-unprivileged base, fix 2.10.0-r0 not yet in the pinned base image. nginx here serves static files and never parses XML. Re-pin the base when a patched image is published."
+    expired_at: 2026-12-02
