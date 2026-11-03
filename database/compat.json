@@ -1,0 +1,8 @@
+{
+  "_comment": "Which schema versions each release can run against, as inclusive ranges of migration timestamps. Updated in the same pull request as every migration. Used by scripts/rollback_check.py before any rollback.",
+  "releases": {
+    "school-app/v1": {"min": 1700000000000, "max": 1700000002000, "note": "reads and writes full_name, which the contract migration drops"},
+    "school-app/v2": {"min": 1700000001000, "max": 1700000002000, "note": "needs display_name (expand) and still writes full_name (dual write)"},
+    "school-app/v3": {"min": 1700000003000, "max": null, "note": "reads and writes display_name only; needs the contract migration"}
+  }
+}

@@ -32,6 +32,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:unit
+      - name: Compatibility table matches the migrations
+        run: python3 scripts/test_rollback_check.py
 
   integration:
     name: integration

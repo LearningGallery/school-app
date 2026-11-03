@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
@@ -29,7 +30,20 @@ export function createApp(deps: Deps) {
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(express.json({ limit: "100kb" }));
-  app.use(pinoHttp({ logger: deps.logger, autoLogging: { ignore: (r) => r.url === "/metrics" } }));
+  app.use(
+    pinoHttp({
+      logger: deps.logger,
+      autoLogging: { ignore: (r) => r.url === "/metrics" },
+      // One id ties a log line, a trace and a user's complaint together: keep the caller's (ALB or gateway) or make one,
+      // and hand it back so support can ask "what is your x-request-id?".
+      genReqId: (req, res) => {
+        const given = req.headers["x-request-id"];
+        const id = typeof given === "string" && /^[\w.-]{1,64}$/.test(given) ? given : randomUUID();
+        res.setHeader("x-request-id", id);
+        return id;
+      },
+    }),
+  );
 
   app.use((req, res, next) => {
     const end = metrics.httpDuration.startTimer();
