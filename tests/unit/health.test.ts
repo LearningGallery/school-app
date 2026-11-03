@@ -32,3 +32,25 @@ describe("health endpoints", () => {
     await request(app).get("/startupz").expect(503);
   });
 });
+
+describe("request ids", () => {
+  it("keeps a sane caller-provided x-request-id and returns it", async () => {
+    const { app } = build();
+    const res = await request(app)
+      .get("/healthz")
+      .set("x-request-id", "abc-123")
+      .expect(200);
+    expect(res.headers["x-request-id"]).toBe("abc-123");
+  });
+
+  it("replaces an unsafe or missing id with a fresh one", async () => {
+    const { app } = build();
+    const bad = await request(app)
+      .get("/healthz")
+      .set("x-request-id", "x y\tz<script>")
+      .expect(200);
+    expect(bad.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
+    const none = await request(app).get("/healthz").expect(200);
+    expect(none.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});

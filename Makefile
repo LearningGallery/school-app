@@ -9,6 +9,7 @@ lint:
 
 test:
 	npm run test:unit
+	python3 scripts/test_rollback_check.py
 
 # Starts a throwaway Postgres on :55432, runs integration tests, removes it.
 test-integration:
