@@ -1,7 +1,7 @@
 # Promotion moves an already-built, already-attested digest to the next environment. It never builds.
-# The `environment` below carries the approval rule (required reviewers on production).
+# The `environment` below carries the approval rule (required reviewers on the GitHub Environment).
 # The last step opens a pull request against school-gitops with these digests. Git is the record of what runs where;
-# Argo CD deploys when that pull request merges (production still needs a manual sync and CODEOWNERS approval).
+# Argo CD deploys when that pull request merges.
 name: promote
 
 on:
@@ -10,7 +10,7 @@ on:
       environment:
         description: Target environment
         type: choice
-        options: [dev, staging, production]
+        options: [dev, staging]
         required: true
       backend_digest:
         description: "Backend image digest (sha256:...)"

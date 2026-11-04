@@ -1,6 +1,6 @@
 # Build once, deploy many: this workflow is the ONLY place images are built.
 # Merge to main -> build -> push to ECR (OIDC, no stored keys) -> scan the pushed digest -> SBOM ->
-# provenance attestation. Staging and production later consume these exact digests (promote.yml).
+# provenance attestation. Dev and staging consume these exact digests (promote.yml).
 # Opening the GitOps pull request with the new digests is added in Phase 4 (school-gitops).
 name: release
 

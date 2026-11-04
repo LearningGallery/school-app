@@ -17,6 +17,11 @@ RUN npm run build -w frontend
 
 # Runtime: static files + nginx as a non-root user (uid 101). Root filesystem can be read-only.
 FROM ${NGINX_IMAGE} AS runtime
+# Temporary: the pinned base ships libexpat 2.9.0-r0 (CVE-2026-113351, fixed in 2.10.0-r0) and the Trivy gate blocks it.
+# Remove this block once the upstream tag is rebuilt with the fix and the NGINX_IMAGE digest above is bumped.
+USER 0
+RUN apk upgrade --no-cache libexpat
+USER 101
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 EXPOSE 8080
