@@ -1,6 +1,6 @@
-# The gate between staging and production (module 17): ask the DEPLOYED staging system real questions.
-# Run it after the staging promotion has synced. Production promotion should require this to be green.
-# Test credentials belong to a narrow staging-only account; they must not exist in production.
+# The gate after staging (module 17): ask the DEPLOYED staging system real questions.
+# Run it after the staging promotion has synced. This project runs dev and staging only; with a production environment,
+# its promotion should require this to be green. Test credentials belong to a narrow staging-only account.
 name: verify-staging
 
 on:
