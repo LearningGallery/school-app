@@ -413,7 +413,7 @@ export function StudentsPage() {
     <div>
       <PageHeader
         title="Student Directory"
-        subtitle="Manage and view all enrolled student records."
+        subtitle="Manage and view all enrolled student records, visible to teachers and administrators."
         action={
           isAdmin && (
             <button type="button" onClick={() => setOpen(true)} className={primaryBtn}>

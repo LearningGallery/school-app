@@ -12,7 +12,7 @@ const db = createPool(config.DATABASE_URL, (err) =>
 const state: RuntimeState = { started: false, shuttingDown: false };
 
 const app = createApp({ config, db, flags: new EnvFlagProvider(), logger, state });
-const server = app.listen(config.PORT, () => logger.info({ port: config.PORT }, "listening"));
+const server = app.listen(config.PORT, () => logger.info({ port: config.PORT }, "school api listening"));
 
 // Startup: listen first so probes get answers, flip `started` once the DB is reachable.
 (async () => {
