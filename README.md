@@ -1,6 +1,6 @@
 # school-app
 
-Repo 1 of 3: the School Management System (React SPA, Express API, PostgreSQL). Layout and teaching context: [docs/00-overview](../docs/00-overview/README.md).
+Repo 1 of 3: the School Management System (Edusync React SPA with Tailwind, Express API, PostgreSQL). Layout and teaching context: [docs/00-overview](../docs/00-overview/README.md).
 
 ```bash
 cp .env.example .env     # synthetic local values only
@@ -15,7 +15,7 @@ make down
 | Path | What |
 |---|---|
 | `backend/` | Express + TypeScript API, `/healthz` `/readyz` `/startupz` `/metrics`, feature flags |
-| `frontend/` | React + Vite SPA, served by non-root Nginx |
+| `frontend/` | React + Vite + Tailwind SPA (Edusync UI: dashboard, students, classes, attendance, grades, fees, announcements), served by non-root Nginx |
 | `database/migrations/` | node-pg-migrate SQL migrations (v1 schema; expand/contract in module 19) |
 | `tests/` | `unit/`, `integration/`, `smoke/`, `e2e/` |
 | `Dockerfile.backend`, `Dockerfile.frontend` | multi-stage, non-root, base images pinned by digest |

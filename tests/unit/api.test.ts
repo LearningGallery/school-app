@@ -135,3 +135,182 @@ describe("feature flag and metrics", () => {
     expect(metrics.text).toMatch(/http_request_duration_seconds_bucket/);
   });
 });
+
+describe("Edusync modules", () => {
+  const admin = () => `Bearer ${tokenFor("admin")}`;
+  const teacher = () => `Bearer ${tokenFor("teacher")}`;
+
+  it("login returns the profile next to the token", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({
+      rows: [
+        {
+          id: UUID,
+          email: "a@example.com",
+          password_hash: await hashPassword("pw"),
+          role: "admin",
+          first_name: "Ada",
+          last_name: null,
+        },
+      ],
+    });
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "a@example.com", password: "pw" })
+      .expect(200);
+    expect(res.body.user).toEqual({
+      id: UUID,
+      email: "a@example.com",
+      role: "admin",
+      firstName: "Ada",
+      lastName: "",
+    });
+  });
+
+  it("creating a student with a class enrolls in the same statement", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [{ id: UUID }] });
+    await request(app)
+      .post("/api/students")
+      .set("Authorization", admin())
+      .send({
+        displayName: "Ada",
+        email: "ada@example.com",
+        gradeLevel: 5,
+        classId: UUID,
+      })
+      .expect(201);
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/INSERT INTO enrollments/);
+    expect(params[7]).toBe(UUID);
+  });
+
+  it("fees are admin only", async () => {
+    const { app } = build();
+    await request(app)
+      .get("/api/fees")
+      .set("Authorization", teacher())
+      .expect(403);
+    await request(app)
+      .post("/api/fees")
+      .set("Authorization", teacher())
+      .send({
+        studentId: UUID,
+        feeType: "Tuition",
+        amount: 10,
+        dueDate: "2026-01-01",
+      })
+      .expect(403);
+  });
+
+  it("rejects a non-positive fee amount", async () => {
+    const { app } = build();
+    await request(app)
+      .post("/api/fees")
+      .set("Authorization", admin())
+      .send({
+        studentId: UUID,
+        feeType: "Tuition",
+        amount: 0,
+        dueDate: "2026-01-01",
+      })
+      .expect(400);
+  });
+
+  it("paying an unknown fee is a 404", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [] });
+    await request(app)
+      .patch(`/api/fees/${UUID}/pay`)
+      .set("Authorization", admin())
+      .expect(404);
+  });
+
+  it("teachers can post announcements; an unknown priority is rejected", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [{ id: UUID, title: "Hi" }] });
+    await request(app)
+      .post("/api/announcements")
+      .set("Authorization", teacher())
+      .send({ title: "Hi", content: "Exams on Monday" })
+      .expect(201);
+    await request(app)
+      .post("/api/announcements")
+      .set("Authorization", teacher())
+      .send({ title: "Hi", content: "x", priority: "urgent" })
+      .expect(400);
+  });
+
+  it("dashboard computes the attendance percentage, and null when nothing is marked", async () => {
+    const { app, query } = build();
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          { students: 4, classes: 2, marked: 8, present: 6, announcements: 1 },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get("/api/dashboard")
+      .set("Authorization", admin())
+      .expect(200);
+    expect(res.body).toMatchObject({
+      students: 4,
+      attendanceTodayPercent: 75,
+      activity: [],
+    });
+
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          { students: 0, classes: 0, marked: 0, present: 0, announcements: 0 },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const empty = await request(app)
+      .get("/api/dashboard")
+      .set("Authorization", admin());
+    expect(empty.body.attendanceTodayPercent).toBeNull();
+  });
+
+  it("the all-grades list honours the grade_letters flag", async () => {
+    const rows = [
+      { studentName: "Ada", className: "Maths", term: "T1", score: 82 },
+    ];
+    const off = build();
+    off.query.mockResolvedValue({ rows });
+    expect(
+      (await request(off.app).get("/api/grades").set("Authorization", admin()))
+        .body[0].letter,
+    ).toBeUndefined();
+    const on = build({ env: { FLAG_GRADE_LETTERS: "true" } });
+    on.query.mockResolvedValue({ rows });
+    expect(
+      (await request(on.app).get("/api/grades").set("Authorization", admin()))
+        .body[0].letter,
+    ).toBe("B");
+  });
+
+  it("attendance summary needs a valid date", async () => {
+    const { app } = build();
+    await request(app)
+      .get("/api/attendance/summary?date=nope")
+      .set("Authorization", admin())
+      .expect(400);
+  });
+});
+
+describe("rate limiting", () => {
+  it("locks out a login guesser after 20 failures but not other routes", async () => {
+    const { app, query } = build();
+    query.mockResolvedValue({ rows: [] });
+    const guess = () =>
+      request(app)
+        .post("/api/auth/login")
+        .send({ email: "a@example.com", password: "nope" });
+    for (let i = 0; i < 20; i++) await guess().expect(401);
+    await guess().expect(429);
+    await request(app).get("/api/students").expect(401); // still answered, only login is locked
+  });
+});

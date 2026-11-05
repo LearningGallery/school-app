@@ -3,6 +3,7 @@
   "releases": {
     "school-app/v1": {"min": 1700000000000, "max": 1700000002000, "note": "reads and writes full_name, which the contract migration drops"},
     "school-app/v2": {"min": 1700000001000, "max": 1700000002000, "note": "needs display_name (expand) and still writes full_name (dual write)"},
-    "school-app/v3": {"min": 1700000003000, "max": null, "note": "reads and writes display_name only; needs the contract migration"}
+    "school-app/v3": {"min": 1700000003000, "max": null, "note": "reads and writes display_name only; needs the contract migration (runs unchanged on the v4 schema)"},
+    "school-app/v4": {"min": 1700000004000, "max": null, "note": "adds Edusync modules (announcements, fees, profile columns); v3 runs on this schema, v4 needs it"}
   }
 }

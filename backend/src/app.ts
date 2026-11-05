@@ -28,6 +28,8 @@ export function createApp(deps: Deps) {
   const metrics = createMetrics();
   const app = express();
   app.disable("x-powered-by");
+  // One proxy (the ALB, or Nginx in compose) sits in front: trust its X-Forwarded-For so rate limits see the real client.
+  app.set("trust proxy", 1);
   app.use(helmet());
   app.use(express.json({ limit: "100kb" }));
   app.use(
