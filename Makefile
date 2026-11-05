@@ -13,7 +13,7 @@ test:
 
 # Starts a throwaway Postgres on :55432, runs integration tests, removes it.
 test-integration:
-	docker compose up -d db
+	docker compose up -d --wait db
 	DATABASE_URL=postgres://postgres:$${POSTGRES_PASSWORD:-local-dev-password}@localhost:55432/school npm run test:integration; rc=$$?; docker compose stop db; exit $$rc
 
 up:

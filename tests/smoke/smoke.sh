@@ -29,6 +29,8 @@ token=$(curl -s --max-time 10 -X POST "$BASE_URL/api/auth/login" -H 'Content-Typ
 if [ -n "$token" ]; then
   echo "ok    login"
   check "students list" 200 "$BASE_URL/api/students" -H "Authorization: Bearer $token"
+  check "dashboard" 200 "$BASE_URL/api/dashboard" -H "Authorization: Bearer $token"
+  check "announcements" 200 "$BASE_URL/api/announcements" -H "Authorization: Bearer $token"
 else
   echo "FAIL  login"; fail=1
 fi

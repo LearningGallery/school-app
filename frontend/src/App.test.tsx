@@ -16,6 +16,6 @@ describe("routing", () => {
         <App />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: "School login" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Welcome back." })).toBeTruthy();
   });
 });
