@@ -130,3 +130,155 @@ describe("school flow against real Postgres", () => {
     );
   });
 });
+
+describe("Edusync modules against real Postgres", () => {
+  it("class, student with enrollment, attendance summary, grades list, fees, announcements, dashboard", async () => {
+    const klass = (
+      await request(app)
+        .post("/api/classes")
+        .set("Authorization", auth)
+        .send({ name: "Physics 10-A", grade: "10", section: "A", capacity: 30 })
+        .expect(201)
+    ).body;
+    const student = (
+      await request(app)
+        .post("/api/students")
+        .set("Authorization", auth)
+        .send({
+          displayName: "Grace Hopper",
+          email: "grace@example.com",
+          gradeLevel: 10,
+          gender: "Female",
+          dateOfBirth: "2009-12-09",
+          phoneNumber: "+1 555 0100",
+          classId: klass.id,
+        })
+        .expect(201)
+    ).body;
+    expect(student.studentNumber).toMatch(/^S\d{8}$/);
+
+    const listed = (
+      await request(app).get("/api/students").set("Authorization", auth)
+    ).body;
+    expect(
+      listed.find((s: { id: string }) => s.id === student.id),
+    ).toMatchObject({
+      className: "Physics 10-A",
+      dateOfBirth: "2009-12-09",
+    });
+
+    const classes = (
+      await request(app).get("/api/classes").set("Authorization", auth)
+    ).body;
+    expect(
+      classes.find((c: { id: string }) => c.id === klass.id),
+    ).toMatchObject({
+      grade: "10",
+      capacity: 30,
+      studentCount: 1,
+    });
+
+    await request(app)
+      .post("/api/attendance")
+      .set("Authorization", auth)
+      .send({
+        studentId: student.id,
+        classId: klass.id,
+        date: "2026-02-02",
+        status: "late",
+      })
+      .expect(201);
+    const summary = (
+      await request(app)
+        .get("/api/attendance/summary?date=2026-02-02")
+        .set("Authorization", auth)
+        .expect(200)
+    ).body;
+    expect(summary).toEqual([
+      expect.objectContaining({
+        className: "Physics 10-A",
+        total: 1,
+        present: 0,
+        late: 1,
+        absent: 0,
+      }),
+    ]);
+
+    await request(app)
+      .post("/api/grades")
+      .set("Authorization", auth)
+      .send({
+        studentId: student.id,
+        classId: klass.id,
+        term: "Q1",
+        score: 95,
+        remarks: "Excellent",
+      })
+      .expect(201);
+    const grades = (
+      await request(app)
+        .get("/api/grades")
+        .set("Authorization", auth)
+        .expect(200)
+    ).body;
+    expect(grades).toContainEqual(
+      expect.objectContaining({
+        studentName: "Grace Hopper",
+        term: "Q1",
+        remarks: "Excellent",
+        letter: "A",
+      }),
+    );
+
+    const past = (
+      await request(app)
+        .post("/api/fees")
+        .set("Authorization", auth)
+        .send({
+          studentId: student.id,
+          feeType: "Tuition",
+          amount: 1200.5,
+          dueDate: "2020-01-01",
+        })
+        .expect(201)
+    ).body;
+    expect(past).toMatchObject({
+      status: "overdue",
+      amount: 1200.5,
+      studentName: "Grace Hopper",
+    });
+    const paid = (
+      await request(app)
+        .patch(`/api/fees/${past.id}/pay`)
+        .set("Authorization", auth)
+        .expect(200)
+    ).body;
+    expect(paid.status).toBe("paid");
+    await request(app)
+      .patch("/api/fees/7d9b6c0e-3f1a-4b8e-9c55-2a1f6e0d4b11/pay")
+      .set("Authorization", auth)
+      .expect(404);
+
+    await request(app)
+      .post("/api/announcements")
+      .set("Authorization", auth)
+      .send({ title: "Mid-terms", content: "March 15-20", priority: "high" })
+      .expect(201);
+    const news = (
+      await request(app).get("/api/announcements").set("Authorization", auth)
+    ).body;
+    expect(news[0]).toMatchObject({ title: "Mid-terms", priority: "high" });
+
+    const dash = (
+      await request(app)
+        .get("/api/dashboard")
+        .set("Authorization", auth)
+        .expect(200)
+    ).body;
+    expect(dash.students).toBeGreaterThanOrEqual(2);
+    expect(dash.announcements).toBe(1);
+    expect(dash.activity.map((a: { kind: string }) => a.kind)).toEqual(
+      expect.arrayContaining(["student", "announcement", "fee"]),
+    );
+  });
+});
